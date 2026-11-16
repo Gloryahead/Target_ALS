@@ -1,0 +1,13 @@
+# Core tools: VCF standardisation, QC, SV/CNV/repeat tallies, concordance, aggregation scripts.
+# Build: micromamba env create -f environments/01_core.yml --yes
+name: target_als_core
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - pyyaml
+  - bcftools=1.23
+  - samtools=1.23
+  - htslib                     # tabix/bgzip; unpinned on purpose (bcftools/samtools 1.23 fix the version)
+  - bedtools=2.31.*

@@ -1,0 +1,144 @@
+# ══════════════════════════════════════════════════════════════════════
+# Target ALS Data Engine WGS variant-call pipeline - master configuration
+# All genomes GRCh38, chr-prefixed contigs. Three SETS, never pooled.
+# No participant data lives in this file; per-subject paths are in the
+# PRIVATE, git-ignored config/samples.private.tsv.
+# ══════════════════════════════════════════════════════════════════════
+
+# ── Paths (outputs only under xdisk) ──────────────────────────────────
+samples: "config/samples.private.tsv"
+outdir:  "/xdisk/haining/maarowosegbe/target_als/results"
+logdir:  "/xdisk/haining/maarowosegbe/target_als/logs"
+
+genome:
+  assembly: "GRCh38"
+  # chr-prefixed GRCh38 FASTA, samtools-faidx'ed. Reused from the WGS repo (Broad hg38 bundle).
+  # Only used for `bcftools norm` left-alignment: REF alleles on chr1-22,X,Y,M are identical in the
+  # NYGC (full analysis set + decoy + HLA) and DRAGEN (hg38 noalt + decoy) builds.
+  fasta: "/xdisk/haining/maarowosegbe/WGS_variant_pipeline/ref/Homo_sapiens_assembly38.fasta"
+
+standard_contigs: [chr1, chr2, chr3, chr4, chr5, chr6, chr7, chr8, chr9, chr10, chr11, chr12,
+                   chr13, chr14, chr15, chr16, chr17, chr18, chr19, chr20, chr21, chr22,
+                   chrX, chrY, chrM]
+
+# ── Sample-sheet builder (scripts/build_sample_sheet.py) ──────────────
+sample_sheet:
+  vcf_root: "/xdisk/haining/maarowosegbe/target_als/vcfs"
+  # Regex applied to the FILE NAME; group 1 = subject ID. CHECK this against the (masked) naming
+  # pattern yourself - the default just takes everything before the first '.' or '_'.
+  subject_regex: '^([^._]+)'
+
+# ── The three sets ────────────────────────────────────────────────────
+# `products.<name>.glob` is matched against file names inside each `sources[].dir` folder.
+# `filters.<product>`: pass_only -> bcftools `-f PASS`; include/exclude -> bcftools expressions
+# (genotype terms act on the single sample column).
+sets:
+  nygc_sr:
+    site: NYGC
+    data_type: SR
+    caller: "GATK HaplotypeCaller + VQSR (GRCh38_full_analysis_set_plus_decoy_hla)"
+    groups: [ALS, Control]
+    sources:
+      - {dir: ALS_NYGC_SR-WGS,                          group: ALS}
+      - {dir: Non-Neurological_Control_NYGC_SR-WGS,     group: Control}
+    products:
+      small:        {glob: "*recalibrated.haplotypeCalls.vcf.gz"}
+      sv:           {glob: "*manta.annotated.vcf.gz"}
+      cnv:          {glob: "*canvas.annotated.vcf.gz"}
+      repeats:      {glob: "*eh.vcf"}
+      repeat_table: {glob: "*eh.summary_table"}     # carried in the sheet; not parsed in v1 (see README)
+    filters:
+      small:   {pass_only: true, include: "FMT/DP>=10 && FMT/GQ>=20", exclude: 'GT="ref" || GT="mis"'}
+      sv:      {pass_only: true}
+      cnv:     {pass_only: true}
+      repeats: {pass_only: false}                   # ExpansionHunter FILTER semantics unverified
+
+  psomagen_sr:
+    site: Psomagen
+    data_type: SR
+    caller: "DRAGEN (hg38_noalt_with_decoy)"
+    groups: [ALS, Control]
+    sources:
+      - {dir: ALS_Psomagen_SR-WGS,                       group: ALS}
+      - {dir: Non-Neurological_Control_Psomagen_SR-WGS,  group: Control}
+    products:
+      small:   {glob: "*hard-filtered.vcf.gz"}
+      sv:      {glob: "*sv.vcf.gz"}
+      cnv:     {glob: "*cnv.vcf.gz"}
+      repeats: {glob: "*repeats.vcf.gz"}
+    filters:
+      small:   {pass_only: true, exclude: 'GT="ref" || GT="mis"'}
+      sv:      {pass_only: true}
+      cnv:     {pass_only: true}
+      repeats: {pass_only: false}
+
+  psomagen_lr:                                      # ALS-ONLY track: no long-read controls exist
+    site: Psomagen
+    data_type: LR
+    caller: "DeepVariant-style small calls + pbsv SVs"
+    groups: [ALS]
+    sources:
+      - {dir: ALS_Psomagen_LR-WGS, group: ALS}
+    products:
+      small: {glob: "*.vcf.gz", exclude_glob: "*.sv.vcf*"}
+      sv:    {glob: "*.sv.vcf*"}
+    filters:
+      # FILTER==PASS already removes RefCall / LowQual / NoCall; hom-ref and missing GTs dropped too.
+      small: {pass_only: true, exclude: 'GT="ref" || GT="mis"'}
+      sv:    {pass_only: true}
+
+# ── Standardise (rule 01) ─────────────────────────────────────────────
+# bcftools view (contigs, filters) -> bcftools norm -m -any -f <genome.fasta>   (small variants only)
+
+# ── Annotation (rule 03) - uniform snpEff re-annotation of ALL small variants ──
+annotation:
+  snpeff_db:       "GRCh38.105"                    # must exist in snpeff_data_dir (slurm/04_snpeff_db.slurm)
+  snpeff_data_dir: "/xdisk/haining/maarowosegbe/target_als/ref/snpeff_data"
+  snpeff_extra:    ""                              # e.g. "-canon" to keep canonical transcripts only
+  snpeff_mem_mb:   12000
+  # Optional hooks. Leave "" to skip. DB VCFs must be bgzipped+indexed, GRCh38 and chr-prefixed
+  # (ClinVar's GRCh38 VCF has bare contig names: make a chr-renamed copy first, see README).
+  gnomad_vcf:      ""
+  gnomad_columns:  "INFO/AF"                       # bcftools annotate -c spec
+  gnomad_af_tag:   ""                              # INFO tag holding gnomAD AF after annotation (e.g. AF); "" = no AF filter
+  clinvar_vcf:     ""
+  clinvar_columns: "INFO/CLNSIG,INFO/CLNREVSTAT"
+  gene_bed:        "/xdisk/haining/maarowosegbe/target_als/ref/genes.GRCh38.bed"   # scripts/make_gene_bed.sh
+
+# ── Rule 05: rare protein-altering variants in an ALS gene list ───────
+rare_als:
+  gene_list: "config/als_genes.example.txt"        # USER-SUPPLIED: one gene symbol per line
+  af_max: 0.001                                    # applied only when gnomad_af_tag is set
+  consequence_terms: [missense_variant, stop_gained, stop_lost, start_lost, frameshift_variant,
+                      splice_acceptor_variant, splice_donor_variant, inframe_insertion,
+                      inframe_deletion, protein_altering_variant]
+
+# ── Rules 06/07: SV and CNV tallies ───────────────────────────────────
+sv:
+  size_bins:  [50, 100, 500, 1000, 10000, 100000, 1000000]
+cnv:
+  size_bins:  [1000, 10000, 100000, 1000000, 10000000]
+
+# ── Rule 08: repeat expansions ────────────────────────────────────────
+# NAME -> {repid, expanded_min}. repid must match the INFO/REPID in the ExpansionHunter-style VCFs.
+# THRESHOLDS ARE PLACEHOLDERS to verify against the literature / your variant catalog before use.
+repeat_loci:
+  C9orf72: {repid: "C9ORF72", expanded_min: 30}
+  ATXN2:   {repid: "ATXN2",   expanded_min: 33}
+
+# ── Rule 09: cross-site concordance (a comparison between sets, never a merge) ─────
+concordance:
+  pairs:
+    - [nygc_sr, psomagen_sr]                       # same subject sequenced at both sites
+    # - [psomagen_sr, psomagen_lr]                 # short vs long read, same site (ALS only)
+
+# ── Focus regions (e.g. MAPT 3' UTR, GRCh38) ──────────────────────────
+# bed: "" disables. When set, the listed stages run on these regions only, write under
+# <outdir>/focus_<label>/, and `rule all` requests only those stages. Standardise and QC are
+# always genome-wide. Allowed stages: annotate, variants, rare, sv, cnv, repeats, concordance.
+# ("annotate" restricts "variants" and "rare" too, since they read the annotated VCF.)
+# BED coordinates: 0-based half-open, chr-prefixed GRCh38. Take them from a public annotation.
+focus_regions:
+  bed: ""
+  label: ""
+  stages: [annotate, variants, rare, sv, cnv, repeats]

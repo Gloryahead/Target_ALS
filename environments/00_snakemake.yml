@@ -1,0 +1,11 @@
+# Controller environment - only Snakemake itself + the SLURM executor plugin.
+# Build: micromamba env create -f environments/00_snakemake.yml --yes
+name: snakemake_env
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - snakemake=8.20.*
+  - snakemake-executor-plugin-slurm=0.11.*
+  - pandas=2.2.*

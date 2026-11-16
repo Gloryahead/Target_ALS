@@ -1,0 +1,9 @@
+# Overlay for the dry-run test: points everything at invented placeholder inputs (empty files).
+#   snakemake -n --configfile config/config.yaml tests/config.fake.yaml
+samples: "tests/samples.fake.tsv"
+outdir:  "tests/fake/out"
+logdir:  "tests/fake/logs"
+genome:
+  fasta: "tests/fake/ref/genome.fa"
+annotation:
+  gene_bed: "tests/fake/ref/genes.bed"

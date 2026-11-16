@@ -1,0 +1,177 @@
+"""
+Target ALS Data Engine WGS variant-call pipeline - Snakemake entry point.
+
+Analyses pre-called VCFs (no alignment, no calling) from three SETS - nygc_sr, psomagen_sr,
+psomagen_lr - for ALS vs non-neurological controls. Each rule runs inside a pre-built micromamba
+environment; Snakemake submits each rule as its own SLURM job through the executor plugin.
+
+HARD RULES (see README): never pool/merge calls across sets; per-sample VCFs have no hom-ref calls,
+so merged tables are for carrier counts only; comparisons are within a set and descriptive.
+
+Prerequisites:
+    micromamba env create -f environments/00_snakemake.yml --yes     (+ 01..03, see slurm/01_setup_envs.slurm)
+
+Usage:
+    micromamba activate snakemake_env
+
+    # Dry run - shows what would run without submitting jobs:
+    snakemake -n --profile workflow/profiles/slurm
+
+    # Submit everything:
+    snakemake --profile workflow/profiles/slurm
+
+    # One set / one stage only (aggregate target):
+    snakemake --profile workflow/profiles/slurm /xdisk/haining/maarowosegbe/target_als/results/aggregate/nygc_sr/qc.summary.tsv
+
+    # Focus-region run (config focus_regions.bed set):  same commands; outputs go to <outdir>/focus_<label>/
+"""
+
+import json
+import os
+import re
+import sys
+
+configfile: "config/config.yaml"
+
+SCRIPTS = os.path.join(workflow.basedir, "scripts")
+sys.path.insert(0, SCRIPTS)
+import sheetlib
+
+# ── micromamba activation helper (same as the WGS repo; see its Snakefile for why) ──
+_MAMBA_EXE  = "/opt/ohpc/pub/apps/micromamba/2.0.2-2/bin/micromamba"
+_MAMBA_ROOT = "/groups/haining/maarowosegbe/micromamba"
+
+def mamba_activate(env_name):
+    return (
+        f"export MAMBA_ROOT_PREFIX={_MAMBA_ROOT}\n"
+        f'eval "$({_MAMBA_EXE} shell hook --shell bash)"\n'
+        f"micromamba activate {env_name}"
+    )
+
+# ── Paths ─────────────────────────────────────────────────────────────
+OUTDIR = config["outdir"].rstrip("/")
+LOGDIR = config["logdir"].rstrip("/")
+REF    = config["genome"]["fasta"]
+SETS   = config["sets"]
+CONTIG_ARG = "-t " + ",".join(config["standard_contigs"])
+
+# ── Sample sheet (PRIVATE) -> {set: {subject: row}} ───────────────────
+UNITS = sheetlib.load_sheet(config["samples"], SETS)
+
+def subjects(set_name, product):
+    """Subjects of a set that have the given product (sheet column non-empty)."""
+    return sheetlib.subjects_with(UNITS, set_name, product)
+
+def unit_path(set_name, subject, product):
+    return UNITS[set_name][subject][sheetlib.PRODUCT_COLUMN[product]]
+
+# ── Concordance pairs (comparison between sets; subjects present in both) ─
+PAIRS = {}
+for _a, _b in (config.get("concordance", {}) or {}).get("pairs", []) or []:
+    if _a not in SETS or _b not in SETS or _a == _b:
+        raise ValueError("concordance.pairs must name two different configured sets.")
+    _both = sorted(set(subjects(_a, "small")) & set(subjects(_b, "small")))
+    if _both:
+        PAIRS[f"{_a}__{_b}"] = {"a": _a, "b": _b, "subjects": _both}
+
+# ── Focus regions ─────────────────────────────────────────────────────
+_FOCUS = config.get("focus_regions") or {}
+FOCUS_BED   = _FOCUS.get("bed") or ""
+FOCUS_LABEL = _FOCUS.get("label") or ""
+_ALLOWED = {"annotate", "variants", "rare", "sv", "cnv", "repeats", "concordance"}
+_restricted = set(_FOCUS.get("stages") or []) if FOCUS_BED else set()
+if FOCUS_BED and not FOCUS_LABEL:
+    raise ValueError("focus_regions.label is required when focus_regions.bed is set.")
+if _restricted - _ALLOWED:
+    raise ValueError(f"focus_regions.stages: unknown stage(s) {sorted(_restricted - _ALLOWED)}; allowed {sorted(_ALLOWED)}")
+if "annotate" in _restricted:            # variants / rare read the annotated VCF
+    _restricted |= {"variants", "rare"}
+FOCUS_ROOT = f"{OUTDIR}/focus_{FOCUS_LABEL}" if FOCUS_BED else OUTDIR
+
+STAGE_PRODUCT = {"qc": "small", "variants": "small", "rare": "small",
+                 "sv": "sv", "cnv": "cnv", "repeats": "repeats"}
+ALL_STAGES = ["qc", "variants", "rare", "sv", "cnv", "repeats", "concordance"]
+# root directory per stage: focus root for restricted stages, genome-wide root otherwise
+STAGE_ROOT = {s: (FOCUS_ROOT if s in _restricted else OUTDIR) for s in ALL_STAGES}
+STAGE_ROOT["annotate"] = FOCUS_ROOT if "annotate" in _restricted else OUTDIR
+ACTIVE_STAGES = [s for s in ALL_STAGES if (s in _restricted)] if FOCUS_BED else ALL_STAGES
+
+def focus_args(stage):
+    """bcftools streaming target-file option for a restricted stage ('' otherwise)."""
+    return f"-T {FOCUS_BED}" if (FOCUS_BED and stage in _restricted) else ""
+
+def focus_args_isec(stage):
+    return f"-R {FOCUS_BED}" if (FOCUS_BED and stage in _restricted) else ""
+
+# ── bcftools filter expression per set x product ──────────────────────
+def view_filter_args(set_name, product):
+    f = SETS[set_name]["filters"].get(product, {}) or {}
+    args = []
+    if f.get("pass_only"):
+        args.append("-f PASS")
+    parts = []
+    if f.get("include"):
+        parts.append(f"({f['include']})")
+    if f.get("exclude"):
+        parts.append(f"!({f['exclude']})")
+    if parts:
+        args.append("-i '" + " && ".join(parts) + "'")
+    return " ".join(args)
+
+# ── Per-subject tables feeding each aggregate stage ───────────────────
+def per_subject_tables(stage, set_name):
+    if stage == "concordance":
+        p = PAIRS[set_name]
+        return [f"{STAGE_ROOT['concordance']}/concordance/{set_name}/{s}.counts.tsv" for s in p["subjects"]]
+    prod = STAGE_PRODUCT[stage]
+    root = STAGE_ROOT[stage]
+    sub = subjects(set_name, prod)
+    pattern = {
+        "qc":       f"{OUTDIR}/qc/{set_name}/{{s}}.qc.tsv",
+        "variants": f"{root}/tables/{set_name}/{{s}}.variants.tsv",
+        "rare":     f"{root}/rare_als/{set_name}/{{s}}.rare_als.tsv",
+        "sv":       f"{root}/sv/{set_name}/{{s}}.sv_tally.tsv",
+        "cnv":      f"{root}/cnv/{set_name}/{{s}}.cnv_tally.tsv",
+        "repeats":  f"{root}/repeats/{set_name}/{{s}}.repeats.tsv",
+    }[stage]
+    return [pattern.format(s=s) for s in sub]
+
+def aggregate_targets():
+    t = []
+    for set_name in SETS:
+        for stage in ACTIVE_STAGES:
+            if stage == "concordance":
+                continue
+            if subjects(set_name, STAGE_PRODUCT[stage]):
+                t.append(f"{STAGE_ROOT[stage]}/aggregate/{set_name}/{stage}.summary.tsv")
+    if "concordance" in ACTIVE_STAGES:
+        for pair in PAIRS:
+            t.append(f"{STAGE_ROOT['concordance']}/aggregate/{pair}/concordance.summary.tsv")
+    return t
+
+REPORT_DIR = f"{FOCUS_ROOT}/report"
+
+# Anchor wildcards to what is actually in the sheet / config (avoids cross-underscore matches).
+_subj_all = sorted({s for name in SETS for s in UNITS[name]})
+wildcard_constraints:
+    set     = "|".join(map(re.escape, list(SETS) + list(PAIRS))),
+    subject = "|".join(map(re.escape, _subj_all)) or "NO_SUBJECTS",
+    stage   = "qc|variants|rare|sv|cnv|repeats|concordance",
+
+rule all:
+    input:
+        f"{OUTDIR}/qc/sample_sheet_check.txt",
+        aggregate_targets(),
+        f"{REPORT_DIR}/report_index.md",
+
+include: "rules/00_validate.smk"
+include: "rules/01_standardise.smk"
+include: "rules/02_qc.smk"
+include: "rules/03_annotate.smk"
+include: "rules/04_tables.smk"
+include: "rules/05_rare_als.smk"
+include: "rules/06_sv.smk"
+include: "rules/07_cnv.smk"
+include: "rules/08_repeats.smk"
+include: "rules/09_concordance.smk"
+include: "rules/10_report.smk"

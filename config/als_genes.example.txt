@@ -1,0 +1,16 @@
+# EXAMPLE ALS gene list (public gene symbols). Replace with your own curated list;
+# point rare_als.gene_list in config/config.yaml at it. One symbol per line.
+C9orf72
+SOD1
+TARDBP
+FUS
+TBK1
+OPTN
+NEK1
+VCP
+UBQLN2
+SQSTM1
+KIF5A
+ANG
+PFN1
+MATR3
