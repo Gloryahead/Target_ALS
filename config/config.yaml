@@ -101,8 +101,8 @@ sets:
 
 # ── Annotation (rule 03) - uniform snpEff re-annotation of ALL small variants ──
 annotation:
-  snpeff_db:       "GRCh38.105"                    # must exist in snpeff_data_dir (slurm/04_snpeff_db.slurm)
-  snpeff_data_dir: "/xdisk/haining/maarowosegbe/target_als/ref/snpeff_data"
+  snpeff_db:       "GRCh38.105"                    # must exist in snpeff_data_dir (slurm/02_prepare_refs.slurm downloads it if missing)
+  snpeff_data_dir: "/groups/haining/maarowosegbe/micromamba/envs/wgs_annotation_env/share/snpeff-5.1-4/data"   # REUSED: GRCh38.105 already downloaded by the WGS repo (read-only use)
   snpeff_extra:    ""                              # e.g. "-canon" to keep canonical transcripts only
   snpeff_mem_mb:   12000
   # Optional hooks. Leave "" to skip. DB VCFs must be bgzipped+indexed, GRCh38 and chr-prefixed

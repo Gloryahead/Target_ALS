@@ -24,7 +24,13 @@ mkdir -p "${REF}/snpeff_data"
 cd /home/u11/maarowosegbe/Target_ALS
 
 echo "== snpEff database ${SNPEFF_DB}"
-"${MC}" run -n wgs_annotation_env snpEff download -dataDir "${REF}/snpeff_data" "${SNPEFF_DB}"
+DATADIR=$(grep -m1 'snpeff_data_dir:' config/config.yaml | cut -d'"' -f2)
+if [[ -d "${DATADIR}/${SNPEFF_DB}" ]]; then
+  echo "already present in ${DATADIR}: skipping download"
+else
+  echo "not found in ${DATADIR}: downloading to ${REF}/snpeff_data (then set annotation.snpeff_data_dir to that folder)"
+  "${MC}" run -n wgs_annotation_env snpEff download -dataDir "${REF}/snpeff_data" "${SNPEFF_DB}"
+fi
 
 echo "== gene BED"
 [[ -s "${REF}/Homo_sapiens.GRCh38.105.gtf.gz" ]] || wget -q -O "${REF}/Homo_sapiens.GRCh38.105.gtf.gz" "${GTF_URL}"
