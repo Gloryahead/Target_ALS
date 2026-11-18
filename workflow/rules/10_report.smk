@@ -25,7 +25,7 @@ rule aggregate:
     threads: 1
     resources: mem_mb=4000, runtime=30
     params:
-        activate = mamba_activate("target_als_core"),
+        activate = mamba_activate(ENVS["core"]),
         scripts  = SCRIPTS,
         sheet    = config["samples"],
         site     = lambda wc: _site_label(wc.set),
@@ -49,7 +49,7 @@ rule report:
     threads: 1
     resources: mem_mb=8000, runtime=30
     params:
-        activate = mamba_activate("target_als_r"),
+        activate = mamba_activate(ENVS["r"]),
         scripts  = SCRIPTS,
         roots    = " ".join(f"{s}={STAGE_ROOT[s]}" for s in ACTIVE_STAGES),
         outdir   = REPORT_DIR,

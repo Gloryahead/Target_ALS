@@ -5,6 +5,15 @@
 # PRIVATE, git-ignored config/samples.private.tsv.
 # ══════════════════════════════════════════════════════════════════════
 
+# ── micromamba environments: REUSED from the WGS repo (no new envs built except snakemake_env) ──
+#   core       bcftools, samtools, bedtools, python3      (WGS: wgs_env)
+#   annotation snpEff + bgzip (no bcftools needed there)  (WGS: wgs_annotation_env)
+#   r          R with tidyverse + optparse                 (WGS: wgs_r_env)
+envs:
+  core: "wgs_env"
+  annotation: "wgs_annotation_env"
+  r: "wgs_r_env"
+
 # ── Paths (outputs only under xdisk) ──────────────────────────────────
 samples: "config/samples.private.tsv"
 outdir:  "/xdisk/haining/maarowosegbe/target_als/results"

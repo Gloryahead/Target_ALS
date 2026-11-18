@@ -19,5 +19,5 @@ set -eo pipefail
 export MAMBA_ROOT_PREFIX=/groups/haining/maarowosegbe/micromamba
 MC=/opt/ohpc/pub/apps/micromamba/2.0.2-2/bin/micromamba
 cd /home/u11/maarowosegbe/Target_ALS
-"${MC}" run -n target_als_core python scripts/build_sample_sheet.py \
+"${MC}" run -n snakemake_env python scripts/build_sample_sheet.py \
   --config config/config.yaml --out config/samples.private.tsv

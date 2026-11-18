@@ -30,8 +30,8 @@ CLAUDE.md                      data-use rules + daily lab-notebook rule
 config/config.yaml             3 SETS (caller, globs per product, filters), annotation, focus_regions
 config/als_genes.example.txt   EXAMPLE gene list (replace); rare_als.gene_list points at it
 config/samples.private.tsv     PRIVATE sample sheet (git-ignored; built by scripts/build_sample_sheet.py)
-environments/00..03_*.yml      snakemake_env, target_als_core, target_als_annotation, target_als_r
-slurm/01..04_*.slurm           setup envs, prepare refs, build sample sheet, run pipeline
+environments/00_snakemake.yml    snakemake_env only; other envs are REUSED from the WGS repo (config `envs`)
+slurm/01..04_*.slurm           check envs, prepare refs, build sample sheet, run pipeline
 scripts/                       build_sample_sheet.py, make_gene_bed.sh
 workflow/Snakefile             sample-sheet parsing, focus-region logic, rule all
 workflow/rules/00..10_*.smk    the stages below
@@ -66,7 +66,7 @@ those should be checked against the DUA before leaving the enclave of your own a
 ```bash
 mkdir -p /xdisk/haining/maarowosegbe/target_als/logs/slurm      # SLURM cannot create the log dir
 cd /home/u11/maarowosegbe/Target_ALS
-sbatch slurm/01_setup_envs.slurm            # micromamba envs (once)
+sbatch slurm/01_check_envs.slurm            # verifies the reused WGS envs + snakemake_env (no new envs)
 sbatch slurm/02_prepare_refs.slurm          # snpEff GRCh38 DB, gene BED, FASTA index (once)
 sbatch slurm/03_build_sample_sheet.slurm    # writes config/samples.private.tsv; log = counts only
 ```

@@ -18,7 +18,10 @@ rule annotate_snpeff:
     threads: 2
     resources: mem_mb=_AN["snpeff_mem_mb"] + 2000, runtime=360
     params:
-        activate = mamba_activate("target_als_annotation"),
+        # snpEff/bgzip come from the annotation env (the WGS repo's wgs_annotation_env has no bcftools),
+        # so bcftools is called from the core env through `micromamba run`.
+        activate = mamba_activate(ENVS["annotation"]),
+        bcftools = f'{_MAMBA_EXE} run -n {ENVS["core"]} bcftools',
         focus    = focus_args("annotate"),
         db       = _AN["snpeff_db"],
         datadir  = _AN["snpeff_data_dir"],
@@ -29,7 +32,7 @@ rule annotate_snpeff:
         set -eo pipefail
         {params.activate}
         mkdir -p $(dirname {output.vcf})
-        bcftools view {params.focus} {input.vcf} 2>{log} \
+        {params.bcftools} view {params.focus} {input.vcf} 2>{log} \
           | snpEff -Xmx{params.xmx}m ann -noStats -dataDir {params.datadir} {params.extra} {params.db} 2>>{log} \
           | bgzip -c > {output.vcf}
         """
@@ -46,8 +49,8 @@ rule annotate_databases:
     threads: 2
     resources: mem_mb=6000, runtime=120
     params:
-        activate  = mamba_activate("target_als_annotation"),
-        gnomad    = _AN.get("gnomad_vcf", "") or "",
+        activate  = mamba_activate(ENVS["core"]),
+        gnomad   = _AN.get("gnomad_vcf", "") or "",
         gnomad_c  = _AN.get("gnomad_columns", ""),
         clinvar   = _AN.get("clinvar_vcf", "") or "",
         clinvar_c = _AN.get("clinvar_columns", ""),

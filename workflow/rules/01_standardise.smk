@@ -19,7 +19,7 @@ rule standardise_small:
     threads: 2
     resources: mem_mb=6000, runtime=240
     params:
-        activate = mamba_activate("target_als_core"),
+        activate = mamba_activate(ENVS["core"]),
         contigs  = CONTIG_ARG,
         filt     = lambda wc: view_filter_args(wc.set, "small"),
     shell:
@@ -46,7 +46,7 @@ rule standardise_other:
     threads: 1
     resources: mem_mb=4000, runtime=60
     params:
-        activate = mamba_activate("target_als_core"),
+        activate = mamba_activate(ENVS["core"]),
         contigs  = CONTIG_ARG,
         filt     = lambda wc: view_filter_args(wc.set, wc.product),
     shell:

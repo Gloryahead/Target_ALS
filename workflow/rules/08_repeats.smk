@@ -18,7 +18,7 @@ rule repeat_table:
     threads: 1
     resources: mem_mb=2000, runtime=30
     params:
-        activate = mamba_activate("target_als_core"),
+        activate = mamba_activate(ENVS["core"]),
         scripts  = SCRIPTS,
         focus    = focus_args("repeats"),
         loci     = " ".join(f"{n}:{v['repid']}:{v['expanded_min']}" for n, v in config["repeat_loci"].items()),

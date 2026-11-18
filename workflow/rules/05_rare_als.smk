@@ -21,7 +21,7 @@ rule rare_als_variants:
     threads: 1
     resources: mem_mb=4000, runtime=120
     params:
-        activate = mamba_activate("target_als_core"),
+        activate = mamba_activate(ENVS["core"]),
         scripts  = SCRIPTS,
         terms    = ",".join(config["rare_als"]["consequence_terms"]),
         af_max   = config["rare_als"]["af_max"],

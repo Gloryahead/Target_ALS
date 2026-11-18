@@ -9,7 +9,7 @@ HARD RULES (see README): never pool/merge calls across sets; per-sample VCFs hav
 so merged tables are for carrier counts only; comparisons are within a set and descriptive.
 
 Prerequisites:
-    micromamba env create -f environments/00_snakemake.yml --yes     (+ 01..03, see slurm/01_setup_envs.slurm)
+    micromamba env create -f environments/00_snakemake.yml --yes     (other envs are reused from the WGS repo; see config `envs`, slurm/01_check_envs.slurm)
 
 Usage:
     micromamba activate snakemake_env
@@ -49,6 +49,8 @@ def mamba_activate(env_name):
     )
 
 # ── Paths ─────────────────────────────────────────────────────────────
+# Existing micromamba environments (reused from the WGS repo to save space; see README)
+ENVS   = config["envs"]
 OUTDIR = config["outdir"].rstrip("/")
 LOGDIR = config["logdir"].rstrip("/")
 REF    = config["genome"]["fasta"]

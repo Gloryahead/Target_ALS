@@ -40,3 +40,4 @@
     to carry both, DRAGEN hard-filtered VCFs are filtered on PASS only (as specified).
 12. Not yet exercised on a real Snakemake install on this machine (no Snakemake here): the dry-run logic
     was checked by a stand-in harness; run `bash tests/run_dry_run.sh` once in `snakemake_env`.
+13. **Reused environments.** The pipeline uses wgs_env (bcftools/samtools/bedtools/python), wgs_annotation_env (snpEff, bgzip) and wgs_r_env (tidyverse, optparse) from the WGS repo to save space (names in config `envs`). snpEff rule calls bcftools via `micromamba run -n wgs_env` because wgs_annotation_env has no bcftools. Run slurm/01_check_envs.slurm to confirm every tool is present.

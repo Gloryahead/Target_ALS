@@ -21,7 +21,7 @@ rule validate_sample_sheet:
     threads: 1
     resources: mem_mb=2000, runtime=15
     params:
-        activate = mamba_activate("target_als_core"),
+        activate = mamba_activate(ENVS["core"]),
         scripts = SCRIPTS,
         # only the fields the validator needs (no filter expressions -> no quoting trouble)
         sets_json = json.dumps({k: {f: v[f] for f in ("site", "data_type", "groups")} | {"products": list(v["products"])}

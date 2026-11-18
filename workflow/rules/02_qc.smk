@@ -16,7 +16,7 @@ rule bcftools_stats:
     threads: 2
     resources: mem_mb=4000, runtime=60
     params:
-        activate = mamba_activate("target_als_core"),
+        activate = mamba_activate(ENVS["core"]),
         scripts = SCRIPTS,
     shell:
         """

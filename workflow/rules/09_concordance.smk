@@ -19,7 +19,7 @@ rule concordance_pair:
     threads: 2
     resources: mem_mb=6000, runtime=120
     params:
-        activate = mamba_activate("target_als_core"),
+        activate = mamba_activate(ENVS["core"]),
         focus    = focus_args_isec("concordance"),
         name_a   = lambda wc: PAIRS[wc.set]["a"],
         name_b   = lambda wc: PAIRS[wc.set]["b"],

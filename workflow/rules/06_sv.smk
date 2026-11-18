@@ -17,7 +17,7 @@ rule sv_tally:
     threads: 1
     resources: mem_mb=4000, runtime=60
     params:
-        activate = mamba_activate("target_als_core"),
+        activate = mamba_activate(ENVS["core"]),
         scripts  = SCRIPTS,
         focus    = focus_args("sv"),
         bins     = ",".join(map(str, config["sv"]["size_bins"])),
