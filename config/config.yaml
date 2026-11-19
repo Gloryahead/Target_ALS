@@ -55,7 +55,7 @@ sets:
       sv:           {glob: "*manta.annotated.vcf.gz"}
       cnv:          {glob: "*canvas.annotated.vcf.gz"}
       repeats:      {glob: "*eh.vcf"}
-      repeat_table: {glob: "*eh.summary_table"}     # carried in the sheet; not parsed in v1 (see README)
+      repeat_table: {glob: "*eh.summary_table.annotated.txt"}     # carried in the sheet; not parsed in v1 (see README)
     filters:
       small:   {pass_only: true, include: "FMT/DP>=10 && FMT/GQ>=20", exclude: 'GT="ref" || GT="mis"'}
       sv:      {pass_only: true}
@@ -72,9 +72,9 @@ sets:
       - {dir: Non-Neurological_Control_Psomagen_SR-WGS,  group: Control}
     products:
       small:   {glob: "*hard-filtered.vcf.gz"}
-      sv:      {glob: "*sv.vcf.gz"}
-      cnv:     {glob: "*cnv.vcf.gz"}
-      repeats: {glob: "*repeats.vcf.gz"}
+      sv:      {glob: "*.sv.vcf.gz", exclude_glob: "*.cnv.sv.vcf.gz"}   # DRAGEN also writes a combined *.cnv.sv.vcf.gz; ignored
+      cnv:     {glob: "*.cnv.vcf.gz"}
+      repeats: {glob: "*.repeats.vcf.gz"}
     filters:
       small:   {pass_only: true, exclude: 'GT="ref" || GT="mis"'}
       sv:      {pass_only: true}
