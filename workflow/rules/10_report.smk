@@ -21,7 +21,8 @@ rule aggregate:
         points  = f"{{root}}/aggregate/{{set}}/{{stage}}.points.tsv",
     wildcard_constraints:
         root = "|".join(sorted({re.escape(OUTDIR), re.escape(FOCUS_ROOT)})),
-    log: f"{LOGDIR}/aggregate/{{set}}.{{stage}}.log"
+    # {root} (an absolute path) must appear in the log too, or Snakemake rejects the rule
+    log: f"{LOGDIR}/aggregate{{root}}/{{set}}.{{stage}}.log"
     threads: 1
     resources: mem_mb=4000, runtime=30
     params:
