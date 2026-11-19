@@ -138,8 +138,8 @@ repeat_loci:
 # ── Rule 09: cross-site concordance (a comparison between sets, never a merge) ─────
 concordance:
   pairs:
-    - [nygc_sr, psomagen_sr]                       # same subject sequenced at both sites
-    # - [psomagen_sr, psomagen_lr]                 # short vs long read, same site (ALS only)
+    # - [nygc_sr, psomagen_sr]                     # no subject is in both sets on the current sheet; re-enable if that changes
+    - [psomagen_sr, psomagen_lr]                   # short vs long read, same site (ALS only; 8 shared subjects)
 
 # ── Focus regions (e.g. MAPT 3' UTR, GRCh38) ──────────────────────────
 # bed: "" disables. When set, the listed stages run on these regions only, write under
