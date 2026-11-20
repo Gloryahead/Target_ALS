@@ -40,3 +40,6 @@ __pycache__/
 # OS/editor cruft
 .DS_Store
 *.swp
+
+# private target-variant lists (lab sequence differences, not for the public repo)
+config/*.private.tsv
