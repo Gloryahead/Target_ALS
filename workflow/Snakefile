@@ -111,13 +111,15 @@ def view_filter_args(set_name, product):
     args = []
     if f.get("pass_only"):
         args.append("-f PASS")
-    parts = []
+    # bcftools view takes -i OR -e, not both, and its expression parser rejects '!( ... )'.
+    # So a filter is either an `include` expression or an `exclude` expression, never both.
+    if f.get("include") and f.get("exclude"):
+        raise ValueError(f"filters for {set_name}/{product}: give `include` or `exclude`, not both "
+                         "(fold the exclusion into the include expression)")
     if f.get("include"):
-        parts.append(f"({f['include']})")
-    if f.get("exclude"):
-        parts.append(f"!({f['exclude']})")
-    if parts:
-        args.append("-i '" + " && ".join(parts) + "'")
+        args.append(f"-i '{f['include']}'")
+    elif f.get("exclude"):
+        args.append(f"-e '{f['exclude']}'")
     return " ".join(args)
 
 # ── Per-subject tables feeding each aggregate stage ───────────────────

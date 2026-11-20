@@ -57,7 +57,7 @@ sets:
       repeats:      {glob: "*eh.vcf"}
       repeat_table: {glob: "*eh.summary_table.annotated.txt"}     # carried in the sheet; not parsed in v1 (see README)
     filters:
-      small:   {pass_only: true, include: "FMT/DP>=10 && FMT/GQ>=20", exclude: 'GT="ref" || GT="mis"'}
+      small:   {pass_only: true, include: 'FMT/DP>=10 && FMT/GQ>=20 && GT="alt"'}   # GT="alt" drops hom-ref and missing
       sv:      {pass_only: true}
       cnv:     {pass_only: true}
       repeats: {pass_only: false}                   # ExpansionHunter FILTER semantics unverified
@@ -76,7 +76,7 @@ sets:
       cnv:     {glob: "*.cnv.vcf.gz"}
       repeats: {glob: "*.repeats.vcf.gz"}
     filters:
-      small:   {pass_only: true, exclude: 'GT="ref" || GT="mis"'}
+      small:   {pass_only: true, include: 'GT="alt"'}
       sv:      {pass_only: true}
       cnv:     {pass_only: true}
       repeats: {pass_only: false}
@@ -93,7 +93,7 @@ sets:
       sv:    {glob: "*.sv.vcf*"}
     filters:
       # FILTER==PASS already removes RefCall / LowQual / NoCall; hom-ref and missing GTs dropped too.
-      small: {pass_only: true, exclude: 'GT="ref" || GT="mis"'}
+      small: {pass_only: true, include: 'GT="alt"'}
       sv:    {pass_only: true}
 
 # ── Standardise (rule 01) ─────────────────────────────────────────────
