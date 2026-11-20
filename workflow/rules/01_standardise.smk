@@ -49,13 +49,14 @@ rule standardise_other:
         activate = mamba_activate(ENVS["core"]),
         contigs  = CONTIG_ARG,
         filt     = lambda wc: view_filter_args(wc.set, wc.product),
-        fixdup   = f"{SCRIPTS}/fix_dup_format.awk",
+        fixdup   = f"{SCRIPTS}/drop_bad_format.awk",
     shell:
         """
         set -eo pipefail
         {params.activate}
         mkdir -p $(dirname {output.vcf})
-        # fix_dup_format.awk: NYGC Canvas VCFs have records with a repeated FORMAT tag (FT:FT) that bcftools rejects
+        # drop_bad_format.awk: NYGC Canvas VCFs have a few FailedFT records with a repeated FORMAT tag (FT:FT)
+        # that bcftools rejects; they are dropped (count in the log) - -f PASS would remove them anyway
         (zcat -f {input.vcf} | awk -F'\\t' -v OFS='\\t' -f {params.fixdup} \
           | bcftools view {params.contigs} {params.filt} -Oz -o {output.vcf}) 2>{log}
         bcftools index -t {output.vcf} 2>>{log}
