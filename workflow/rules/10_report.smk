@@ -59,5 +59,5 @@ rule report:
         set -eo pipefail
         {params.activate}
         mkdir -p {params.outdir}
-        Rscript {params.scripts}/report.R --roots {params.roots} --outdir {params.outdir} 2>{log}
+        Rscript {params.scripts}/report.R --roots "{params.roots}" --outdir {params.outdir} 2>{log}
         """
