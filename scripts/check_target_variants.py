@@ -59,6 +59,11 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--out-combo", default="",
                     help="optional TSV: per set x group, how many subjects carry k of the targets (counts only)")
+    ap.add_argument("--out-subject", default="",
+                    help="optional TSV, one row per subject: pseudonym, set, group, how many targets carried, which "
+                         "target labels are NOT carried. PARTICIPANT-LEVEL: keep on xdisk, never paste it into chat.")
+    ap.add_argument("--with-ids", action="store_true",
+                    help="add the real subject ID column to --out-subject (private use only)")
     a = ap.parse_args()
 
     targets = read_targets(a.targets)
@@ -67,6 +72,7 @@ def main():
     # counts[(set, group, site, label)] -> [n_subjects, n_carriers, n_het, n_hom, n_other_alt]
     counts = {}
     combo = {}      # (set, group, site) -> {k carried targets: n subjects}
+    per_subject = []
     missing = 0
     for r in rows:
         sname = set_name(r["site"], r["data_type"])
@@ -75,6 +81,8 @@ def main():
             missing += 1
             continue
         carried = 0
+        n_het_t = n_hom_t = 0
+        not_carried = []
         for t in targets:
             key = (sname, r["group"], r["site"], t["label"])
             c = counts.setdefault(key, [0, 0, 0, 0, 0])
@@ -93,8 +101,12 @@ def main():
                     other = True
             c[1] += int(hit); c[2] += het; c[3] += hom; c[4] += int(other and not hit)
             carried += int(hit)
+            n_het_t += het; n_hom_t += hom
+            if not hit:
+                not_carried.append(t["label"])
         h = combo.setdefault((sname, r["group"], r["site"]), {})
         h[carried] = h.get(carried, 0) + 1
+        per_subject.append((sname, r["group"], r["site"], r["subject"], carried, n_het_t, n_hom_t, not_carried))
 
     tdict = {t["label"]: t for t in targets}
     with open(a.out, "w") as fh:
@@ -109,6 +121,19 @@ def main():
                 for k, n in sorted(h.items()):
                     fh.write(f"{sname}\t{group}\t{site}\t{len(targets)}\t{k}\t{n}\n")
         print(f"wrote {a.out_combo}")
+    if a.out_subject:
+        ordered = sorted(per_subject, key=lambda x: (x[0], x[1], x[3]))
+        idx = {}
+        with open(a.out_subject, "w") as fh:
+            head = ["pseudonym", "set", "group", "site", "n_targets", "n_carried", "n_het", "n_hom", "not_carried"]
+            fh.write("\t".join((["subject_id"] if a.with_ids else []) + head) + "\n")
+            for sname, group, site, subj, k, nh, no, miss in ordered:
+                idx[(sname, group)] = idx.get((sname, group), 0) + 1
+                pseudo = f"{sname}-{group}-{idx[(sname, group)]:02d}"
+                fh.write("\t".join(([subj] if a.with_ids else []) + [
+                    pseudo, sname, group, site, str(len(targets)), str(k), str(nh), str(no),
+                    ",".join(miss) if 0 < k < len(targets) else ("all" if k == 0 else "none")]) + "\n")
+        print(f"wrote {a.out_subject} (participant-level; pseudonyms{' + real IDs' if a.with_ids else ' only'})")
     print(f"wrote {a.out}; subjects without a standardised VCF/index (skipped): {missing}")
 
 
