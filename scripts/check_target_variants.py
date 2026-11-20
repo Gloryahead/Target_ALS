@@ -57,6 +57,8 @@ def main():
     ap.add_argument("--standardised", required=True, help="<outdir>/standardised")
     ap.add_argument("--targets", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--out-combo", default="",
+                    help="optional TSV: per set x group, how many subjects carry k of the targets (counts only)")
     a = ap.parse_args()
 
     targets = read_targets(a.targets)
@@ -64,6 +66,7 @@ def main():
 
     # counts[(set, group, site, label)] -> [n_subjects, n_carriers, n_het, n_hom, n_other_alt]
     counts = {}
+    combo = {}      # (set, group, site) -> {k carried targets: n subjects}
     missing = 0
     for r in rows:
         sname = set_name(r["site"], r["data_type"])
@@ -71,6 +74,7 @@ def main():
         if not os.path.exists(vcf + ".tbi"):
             missing += 1
             continue
+        carried = 0
         for t in targets:
             key = (sname, r["group"], r["site"], t["label"])
             c = counts.setdefault(key, [0, 0, 0, 0, 0])
@@ -88,6 +92,9 @@ def main():
                 else:
                     other = True
             c[1] += int(hit); c[2] += het; c[3] += hom; c[4] += int(other and not hit)
+            carried += int(hit)
+        h = combo.setdefault((sname, r["group"], r["site"]), {})
+        h[carried] = h.get(carried, 0) + 1
 
     tdict = {t["label"]: t for t in targets}
     with open(a.out, "w") as fh:
@@ -95,6 +102,13 @@ def main():
         for (sname, group, site, label), c in sorted(counts.items()):
             t = tdict[label]
             fh.write("\t".join([sname, group, site, label, t["chrom"], t["pos"], t["ref"], t["alt"]] + [str(x) for x in c]) + "\n")
+    if a.out_combo:
+        with open(a.out_combo, "w") as fh:
+            fh.write(f"set\tgroup\tsite\tn_targets\tn_targets_carried\tn_subjects\n")
+            for (sname, group, site), h in sorted(combo.items()):
+                for k, n in sorted(h.items()):
+                    fh.write(f"{sname}\t{group}\t{site}\t{len(targets)}\t{k}\t{n}\n")
+        print(f"wrote {a.out_combo}")
     print(f"wrote {a.out}; subjects without a standardised VCF/index (skipped): {missing}")
 
 
