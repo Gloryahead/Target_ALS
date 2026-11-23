@@ -47,11 +47,15 @@ index <- c("# Target ALS variant pipeline - report index",
 points_plot <- function(pts, tbl, title, facet_cat = TRUE) {
   d <- pts %>% filter(table == tbl)
   if (nrow(d) == 0) return(NULL)
+  # box only for groups with >= 5 subjects (a box on 1-4 points is not meaningful); points always shown
+  box_min <- 5
   p <- ggplot(d, aes(x = group, y = value, colour = group, shape = site)) +
-    geom_boxplot(outlier.shape = NA, fill = NA, colour = "grey50") +
+    geom_boxplot(data = function(x) x %>% group_by(set, group, category) %>% filter(n() >= box_min) %>% ungroup(),
+                 outlier.shape = NA, fill = NA, colour = "grey50") +
     geom_jitter(width = 0.15, size = 2) +
     scale_colour_manual(values = grp_cols, drop = FALSE) +
-    labs(title = title, x = NULL, y = NULL)
+    labs(title = title, x = NULL, y = NULL,
+         caption = paste0("Box shown only for groups with >= ", box_min, " subjects; points are individual subjects."))
   if (facet_cat) p <- p + facet_grid(category ~ set, scales = "free_y")
   p
 }
@@ -78,7 +82,7 @@ if (!is.null(vs)) {
       geom_col(position = "dodge") +
       facet_wrap(~ set + site, scales = "free_x") +
       scale_fill_manual(values = grp_cols) +
-      labs(title = title, x = NULL, y = "mean fraction of a subject's variants") +
+      labs(title = title, x = NULL, y = "category's share of the group's mean total per subject") +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
     save_fig(p, name, w, h)
   }
@@ -95,12 +99,16 @@ if (!is.null(vs)) {
 rs <- read_all("rare", "summary")
 if (!is.null(rs)) {
   write_tsv(rs, file.path(opt$outdir, "rare_als_gene_carriers.tsv"))
-  p <- ggplot(rs, aes(x = reorder(category, -n_nonzero), y = n_nonzero, fill = group)) +
+  # fraction of the group's subjects (groups differ a lot in size, so raw counts are not comparable)
+  rs <- rs %>% mutate(frac_carriers = n_nonzero / n_subjects)
+  write_tsv(rs, file.path(opt$outdir, "rare_als_gene_carriers.tsv"))
+  p <- ggplot(rs, aes(x = reorder(category, -frac_carriers), y = frac_carriers, fill = group)) +
     geom_col(position = "dodge") +
     facet_wrap(~ set + site, scales = "free_x") +
     scale_fill_manual(values = grp_cols) +
-    labs(title = "Subjects carrying a rare protein-altering variant, by gene",
-         x = NULL, y = "number of subjects (see n_subjects in the table)") +
+    labs(title = "Fraction of subjects carrying a rare protein-altering variant, by gene",
+         x = NULL, y = "fraction of the group's subjects",
+         caption = "Group sizes differ (n_subjects is in rare_als_gene_carriers.tsv); descriptive only.") +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
   index <- c(index, paste0("- Rare ALS-gene carriers: figures/", save_fig(p, "rare_als_gene_carriers", 12, 6),
                            ".png; rare_als_gene_carriers.tsv"))
