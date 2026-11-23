@@ -1,0 +1,137 @@
+# ══════════════════════════════════════════════════════════════════════
+# Target ALS Data Engine WGS variant-call pipeline - FULL-TABLE run (208 subjects)
+# Same pipeline and the same three SETS as config.yaml (never pooled), but a separate sample sheet,
+# separate download folders and a separate output base, so the first run is left untouched.
+# Use with:  snakemake --configfile config/config_full.yaml ...   (slurm/04_pipeline_full.slurm)
+# Differences from config.yaml: samples/outdir/logdir/vcf_root, psomagen_lr now has controls,
+# all three concordance pairs enabled (subjects are in more than one set).
+# No participant data lives in this file; per-subject paths are in the PRIVATE, git-ignored
+# config/samples_full.private.tsv.
+# ══════════════════════════════════════════════════════════════════════
+
+envs:
+  core: "wgs_env"
+  annotation: "wgs_annotation_env"
+  r: "wgs_r_env"
+
+# ── Paths (outputs only under xdisk) ──────────────────────────────────
+samples: "config/samples_full.private.tsv"
+outdir:  "/xdisk/haining/maarowosegbe/target_als_full/results"
+logdir:  "/xdisk/haining/maarowosegbe/target_als_full/logs"
+
+genome:
+  assembly: "GRCh38"
+  fasta: "/xdisk/haining/maarowosegbe/WGS_variant_pipeline/ref/Homo_sapiens_assembly38.fasta"
+
+standard_contigs: [chr1, chr2, chr3, chr4, chr5, chr6, chr7, chr8, chr9, chr10, chr11, chr12,
+                   chr13, chr14, chr15, chr16, chr17, chr18, chr19, chr20, chr21, chr22,
+                   chrX, chrY, chrM]
+
+# ── Sample-sheet builder (scripts/build_sample_sheet.py) ──────────────
+sample_sheet:
+  vcf_root: "/xdisk/haining/maarowosegbe/target_als_full/vcfs"
+  # Subject ID is the FIRST token of the file name (<subject>.<sample>.<...>); verified on the
+  # duplicate-sample example. Same regex as the first run.
+  subject_regex: '^([^._]+)'
+
+# ── The three sets ────────────────────────────────────────────────────
+sets:
+  nygc_sr:
+    site: NYGC
+    data_type: SR
+    caller: "GATK HaplotypeCaller + VQSR (GRCh38_full_analysis_set_plus_decoy_hla)"
+    groups: [ALS, Control]
+    sources:
+      - {dir: ALS_NYGC_SR-WGS,                          group: ALS}
+      - {dir: Non-Neurological_Control_NYGC_SR-WGS,     group: Control}
+    products:
+      small:        {glob: "*recalibrated.haplotypeCalls.vcf.gz"}
+      sv:           {glob: "*manta.annotated.vcf.gz"}
+      cnv:          {glob: "*canvas.annotated.vcf.gz"}
+      repeats:      {glob: "*eh.vcf"}
+      repeat_table: {glob: "*eh.summary_table.annotated.txt"}     # 17 NYGC subjects have no table: left empty in the sheet; not parsed in v1
+    filters:
+      small:   {pass_only: true, include: 'FMT/DP>=10 && FMT/GQ>=20 && GT="alt"'}
+      sv:      {pass_only: true}
+      cnv:     {pass_only: true}
+      repeats: {pass_only: false}
+
+  psomagen_sr:
+    site: Psomagen
+    data_type: SR
+    caller: "DRAGEN (hg38_noalt_with_decoy)"
+    groups: [ALS, Control]
+    sources:
+      - {dir: ALS_Psomagen_SR-WGS,                       group: ALS}
+      - {dir: Non-Neurological_Control_Psomagen_SR-WGS,  group: Control}
+    products:
+      small:   {glob: "*hard-filtered.vcf.gz"}
+      sv:      {glob: "*.sv.vcf.gz", exclude_glob: "*.cnv.sv.vcf.gz"}
+      cnv:     {glob: "*.cnv.vcf.gz"}
+      repeats: {glob: "*.repeats.vcf.gz"}
+    filters:
+      small:   {pass_only: true, include: 'GT="alt"'}
+      sv:      {pass_only: true}
+      cnv:     {pass_only: true}
+      repeats: {pass_only: false}
+
+  psomagen_lr:                                      # this table has long-read CONTROLS too (31)
+    site: Psomagen
+    data_type: LR
+    caller: "DeepVariant-style small calls + pbsv SVs"
+    groups: [ALS, Control]
+    sources:
+      - {dir: ALS_Psomagen_LR-WGS,                       group: ALS}
+      - {dir: Non-Neurological_Control_Psomagen_LR-WGS,  group: Control}
+    products:
+      small: {glob: "*.vcf.gz", exclude_glob: "*.sv.vcf*"}
+      sv:    {glob: "*.sv.vcf*"}
+    filters:
+      small: {pass_only: true, include: 'GT="alt"'}
+      sv:    {pass_only: true}
+
+# ── Annotation (rule 03) - uniform snpEff re-annotation of ALL small variants ──
+annotation:
+  snpeff_db:       "GRCh38.105"
+  snpeff_data_dir: "/groups/haining/maarowosegbe/micromamba/envs/wgs_annotation_env/share/snpeff-5.1-4/data"
+  snpeff_extra:    ""
+  snpeff_mem_mb:   12000
+  gnomad_vcf:      ""
+  gnomad_columns:  "INFO/AF"
+  gnomad_af_tag:   ""
+  clinvar_vcf:     ""
+  clinvar_columns: "INFO/CLNSIG,INFO/CLNREVSTAT"
+  # REUSED from the first run (read-only): built once by scripts/make_gene_bed.sh
+  gene_bed:        "/xdisk/haining/maarowosegbe/target_als/ref/genes.GRCh38.bed"
+
+# ── Rule 05: rare protein-altering variants in an ALS gene list ───────
+rare_als:
+  gene_list: "config/als_genes.example.txt"
+  af_max: 0.001
+  consequence_terms: [missense_variant, stop_gained, stop_lost, start_lost, frameshift_variant,
+                      splice_acceptor_variant, splice_donor_variant, inframe_insertion,
+                      inframe_deletion, protein_altering_variant]
+
+# ── Rules 06/07: SV and CNV tallies ───────────────────────────────────
+sv:
+  size_bins:  [50, 100, 500, 1000, 10000, 100000, 1000000]
+cnv:
+  size_bins:  [1000, 10000, 100000, 1000000, 10000000]
+
+# ── Rule 08: repeat expansions ────────────────────────────────────────
+repeat_loci:
+  C9orf72: {repid: "C9ORF72", expanded_min: 30}
+  ATXN2:   {repid: "ATXN2",   expanded_min: 33}
+
+# ── Rule 09: cross-site concordance (a comparison between sets, never a merge) ─────
+# 208 unique subjects fill 289 subject x set slots, so people are shared between sets.
+concordance:
+  pairs:
+    - [nygc_sr, psomagen_sr]
+    - [nygc_sr, psomagen_lr]
+    - [psomagen_sr, psomagen_lr]
+
+focus_regions:
+  bed: ""
+  label: ""
+  stages: [annotate, variants, rare, sv, cnv, repeats]
