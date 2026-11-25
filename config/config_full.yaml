@@ -29,7 +29,7 @@ standard_contigs: [chr1, chr2, chr3, chr4, chr5, chr6, chr7, chr8, chr9, chr10, 
 
 # ── Sample-sheet builder (scripts/build_sample_sheet.py) ──────────────
 sample_sheet:
-  vcf_root: "/xdisk/haining/maarowosegbe/target_als_full/vcfs"
+  vcf_root: "/xdisk/haining/maarowosegbe/target_als/vcfs"   # full-table files were downloaded here (read-only use)
   # Subject ID is the FIRST token of the file name (<subject>.<sample>.<...>); verified on the
   # duplicate-sample example. Same regex as the first run.
   subject_regex: '^([^._]+)'
