@@ -52,7 +52,6 @@ echo "rows in target_variant_carriers.tsv: $(($(wc -l < "${OUT}/target_variant_c
 
 echo "---- 2) people-level summary (counts only) ----"
 "${MC}" run -n wgs_env python scripts/summarise_people.py "${OUT}/per_subject.private.tsv" \
-  --out "${OUT}/people_summary.txt"
-cat "${OUT}/people_summary.txt"
+  --out "${OUT}/people_summary.txt"      # the script also prints the summary (counts only) to this log
 
 echo "========== MAPT overlap finished at: $(date) =========="
